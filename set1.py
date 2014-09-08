@@ -37,7 +37,17 @@ en_freq_table = {
   'w' : .02360,
   'x' : .00150,
   'y' : .01974,
-  'z' : .00074}
+  'z' : .00074,
+  '.' : .01306,
+  ',' : .01232,
+  ';' : .00064,
+  ':' : .00068,
+  '!' : .00066,
+  '?' : .00112,
+  '\'': .00486,
+  '"' : .00534,
+  '-' : .00306,
+  ' ' : .16667}
 
 def hex2base64(a):
   '''Convert a string in hex to a string in base64.'''
@@ -68,7 +78,11 @@ def score_string(s):
     s: str
 
   Returns:
-    score: float
+    lenscore: float
+      The primary score based on how many characters in the alphabet the
+      string returns.
+    freqscore: float
+      The secondary score based on letter frequencies.
   '''
 
   # Typechecking
@@ -76,35 +90,58 @@ def score_string(s):
     raise TypeError('score_string(): input must be string!')
 
   s_letter_count = {}
-  for letter in string.ascii_lowercase:
+  for letter in en_freq_table:
     s_letter_count[letter] = 0
 
   # Get the frequency distribution
   for char in s:
-    if char in string.ascii_lowercase:
-      s_letter_count[char] += 1
-    elif char in string.ascii_uppercase:
+    if char in string.ascii_uppercase:
       s_letter_count[char.lower()] += 1
+    elif char in en_freq_table:
+      s_letter_count[char] += 1
+    elif ord(char) > 126:
+      return (0, -numpy.inf)
 
   total_letters = sum(s_letter_count.values())
+  if total_letters == 0:
+    return (0, -numpy.inf)
 
   score = 0
   for char in s_letter_count:
     score += log(binom.pmf(s_letter_count[char], total_letters, 
                en_freq_table[char]))
 
-  return score
+  return (total_letters, score)
 
 def single_byte_xor(instring):
   '''Crack a cypher that has been xor'd against a single character.'''
-  maxscore = -numpy.inf
-  for char in string.ascii_lowercase:
-    s = fixedXOR(instring, len(instring) * char)
-    score = score_string(s)
-    if score > maxscore:
-      maxscore = score
-      maxchar = char
-  return fixedXOR(instring, len(instring) * maxchar)
+  maxscore = (0, -numpy.inf)
+  maxstring = ''
+  for char in [chr(x).encode('hex') for x in range(128)]:
+    s = fixedXOR(instring, (len(instring) / len(char)) * char).decode('hex')
+    lenscore, freqscore = score_string(s)
+    if lenscore > maxscore[0]:
+      maxscore = (lenscore, freqscore)
+      maxstring = s
+    elif lenscore == maxscore[0] and freqscore > maxscore[1]:
+      maxscore = (lenscore, freqscore)
+      maxstring = s
+  return (maxstring, maxscore)
+
+def detect_singchar_xor(file):
+  '''Find the single line of a file that has been encrypted using a
+  single-character XOR.'''
+  with open(file) as infile:
+    maxscore = (0, -numpy.inf)
+    for line in infile:
+      s, score = single_byte_xor(line.strip())
+      if score[0] > maxscore[0]:
+        maxstring = s
+        maxscore = score
+      elif score[0] == maxscore[0] and score[1] > maxscore[1]:
+        maxstring = s
+        maxscore = score
+    return maxstring
 
 if __name__ == '__main__':
   # Challenge 1
@@ -120,4 +157,7 @@ if __name__ == '__main__':
 
   # Challenge 3
   STRING1_3 = '1b37373331363f78151b7f2b783431333d78397828372d363c78373e783a393b3736'
-  print single_byte_xor(STRING1_3)
+  print single_byte_xor(STRING1_3)[0]
+
+  # Challenge 4
+  print detect_singchar_xor('set1-4.txt'),
