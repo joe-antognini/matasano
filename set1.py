@@ -143,6 +143,14 @@ def detect_singchar_xor(file):
         maxscore = score
     return maxstring
 
+def repeating_key_xor(instring, key):
+  '''Encrypt a string with a key using XOR.'''
+
+  outstring = ''
+  for i, char in enumerate(instring):
+    outstring += fixedXOR(char.encode('hex'), key[i%len(key)].encode('hex'))
+  return outstring
+
 if __name__ == '__main__':
   # Challenge 1
   STRING1_1 = '49276d206b696c6c696e6720796f757220627261696e206c696b65206120706f69736f6e6f7573206d757368726f6f6d'
@@ -167,3 +175,15 @@ if __name__ == '__main__':
   # Challenge 4
   print "Challenge 4 solution:"
   print detect_singchar_xor('set1-4.txt'),
+  print
+
+  # Challenge 5
+  STRING1_5A = 'Burning \'em, if you ain\'t quick and nimble\n'
+  STRING1_5B = 'I go crazy when I hear a cymbal'
+  STRING1_5 = STRING1_5A + STRING1_5B
+  STRING1_5KEY = 'ICE'
+  RESULT1_5A = '0b3637272a2b2e63622c2e69692a23693a2a3c6324202d623d63343c2a26226324272765272'
+  RESULT1_5B = 'a282b2f20430a652e2c652a3124333a653e2b2027630c692b20283165286326302e27282f'
+  RESULT1_5 = RESULT1_5A + RESULT1_5B
+  assert repeating_key_xor(STRING1_5, STRING1_5KEY) == RESULT1_5
+  print "Challenge 5 test passed"
