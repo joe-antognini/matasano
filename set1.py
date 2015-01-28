@@ -151,6 +151,18 @@ def repeating_key_xor(instring, key):
     outstring += fixedXOR(char.encode('hex'), key[i%len(key)].encode('hex'))
   return outstring
 
+def hamming_distance(str1, str2):
+  '''Compute the Hamming distance between str1 and str2 (represented as
+  bytes).'''
+
+  distance = 0
+  for a, b in zip(str1, str2):
+    for x, y in zip('{0:08b}'.format(ord(a)), '{0:08b}'.format(ord(b))):
+      if x != y:
+        distance += 1
+
+  return distance
+
 if __name__ == '__main__':
   # Challenge 1
   STRING1_1 = '49276d206b696c6c696e6720796f757220627261696e206c696b65206120706f69736f6e6f7573206d757368726f6f6d'
