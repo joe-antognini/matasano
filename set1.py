@@ -163,6 +163,13 @@ def hamming_distance(str1, str2):
 
   return distance
 
+def find_keysize(str):
+  '''Given a string of bytes find the keysize by finding the smallest edit
+  distance between blocks of different keysizes.'''
+
+  for keysize in range(1, min(1025, len(str)/4)):
+    blocks = [str[i*keysize:(i+1)*keysize] for i in range(4)]
+
 if __name__ == '__main__':
   # Challenge 1
   STRING1_1 = '49276d206b696c6c696e6720796f757220627261696e206c696b65206120706f69736f6e6f7573206d757368726f6f6d'
