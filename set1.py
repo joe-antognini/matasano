@@ -167,8 +167,30 @@ def find_keysize(str):
   '''Given a string of bytes find the keysize by finding the smallest edit
   distance between blocks of different keysizes.'''
 
+  key_distances = []  
   for keysize in range(1, min(1025, len(str)/4)):
     blocks = [str[i*keysize:(i+1)*keysize] for i in range(4)]
+    block_distances = []
+    for i in range(len(blocks)-1):
+      block1 = blocks[i]
+      for block2 in blocks[i+1:]:
+        block_distances.append(hamming_distance(block1, block2))
+    key_distances.append(float(sum(block_distances)) / len(block_distances)
+      / keysize)
+
+  min_keysize = key_distances.index(min(key_distances)) + 1
+  return min_keysize
+
+def break_repeating_key_xor(str):
+  '''Break text that has been encrypted with repeating key XOR.'''
+  keysize = find_keysize(str)
+  blocks = [str[i::keysize] for i in range(keysize)]
+  decrypt_blocks = []
+  return blocks
+  for block in blocks:
+    decrypt_blocks.append(single_byte_xor(str)[0])
+#  decrypt_str = ''.join([
+  return decrypt_blocks
 
 if __name__ == '__main__':
   # Challenge 1
