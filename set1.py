@@ -65,7 +65,7 @@ en_freq_table = {
 def hex2base64(a):
   '''Convert a string in hex to a string in base64.'''
   data = binascii.unhexlify(a)
-  return binascii.b2a_base64(data).strip()
+  return base64.b64encode(data)
 
 def fixedXOR_hex(a, b):
   '''Take the XOR of two equal length arrays of bytes.'''
