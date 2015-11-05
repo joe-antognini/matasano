@@ -18,11 +18,11 @@ def fixedXOR(b1, b2):
   int1 = int(b1.encode('hex'), base=16)
   int2 = int(b2.encode('hex'), base=16)
 
-  ret = binascii.unhexlify(hex(int1 ^ int2)[2:].rstrip('L'))
+  ret = hex(int1 ^ int2)[2:].rstrip('L')
   if len(ret) % 2 == 1:
     ret = '0' + ret
 
-  return ret
+  return ret.decode('hex')
 
 def score_string(s):
   '''Return a score associated with how likely the string is given English
@@ -116,8 +116,7 @@ def hamming_distance(s1, s2):
 
 def find_keysize(data):
   '''Find the keysize used to encrypt the data.'''
-
-
+  pass
 
 if __name__ == '__main__':
   # Challenge 1
