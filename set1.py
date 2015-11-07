@@ -1,236 +1,167 @@
 #! /usr/bin/env python
 
 #
-# Matasano crypto challanges
+# Matasano Crypto Pals
 # Set 1
 #
 
-from math import log
-from scipy.stats import binom
-import numpy
 import binascii
-import string
-import sys
-
-en_freq_table = {
-  'a' : .08167,
-  'b' : .01492,
-  'c' : .02782,
-  'd' : .04253,
-  'e' : .12702,
-  'f' : .02228,
-  'g' : .02015,
-  'h' : .06094,
-  'i' : .06966,
-  'j' : .00153,
-  'k' : .00772,
-  'l' : .04025,
-  'm' : .02406,
-  'n' : .06749,
-  'o' : .07507,
-  'p' : .01929,
-  'q' : .00095,
-  'r' : .05987,
-  's' : .06327,
-  't' : .09056,
-  'u' : .02758,
-  'v' : .00978,
-  'w' : .02360,
-  'x' : .00150,
-  'y' : .01974,
-  'z' : .00074,
-  '.' : .01306,
-  ',' : .01232,
-  ';' : .00064,
-  ':' : .00068,
-  '!' : .00066,
-  '?' : .00112,
-  '\'': .00486,
-  '"' : .00534,
-  '-' : .00306,
-  ' ' : .16667,
-  '\n': 1e-2}
-#  '&' : 1e-7,
-#  '%' : 1e-7,
-#  '*' : 1e-7,
-#  '@' : 1e-7,
-#  '#' : 1e-7,
-#  '^' : 1e-7,
-#  '(' : 1e-7,
-#  ')' : 1e-7,
-#  '\n': 1e-3}
-# Note: the last characters were arbitrarily given frequencies of 1e-6.  I
-# don't have any data to back this up.
+import base64
+from freqs import *
+from Crypto.Cipher import AES
 
 def hex2base64(a):
   '''Convert a string in hex to a string in base64.'''
   data = binascii.unhexlify(a)
   return base64.b64encode(data)
 
-def fixedXOR_hex(a, b):
-  '''Take the XOR of two equal length arrays of bytes.'''
+def fixedXOR(b1, b2):
+  int1 = int(b1.encode('hex'), base=16)
+  int2 = int(b2.encode('hex'), base=16)
 
-  # Make sure the data are the same length.
-  if len(a) != len(b):
-    raise ValueError('fixedXOR_hex(): data arrays must be the same length!')
-  if type(a) is not str or type(b) is not str:
-    raise TypeError('fixedXOR_hex(): input must be a string!')
+  ret = hex(int1 ^ int2)[2:].rstrip('L')
+  if len(ret) % 2 == 1:
+    ret = '0' + ret
 
-  a_raw = binascii.unhexlify(a)
-  b_raw = binascii.unhexlify(b)
-
-  ret_raw = fixedXOR(a_raw, b_raw)
-  return ret_raw.encode('hex')
-
-def fixedXOR(a, b):
-  '''Take the XOR of two equal length arrays of bytes.'''
-
-  # Make sure the data are the same length.
-  if len(a) != len(b):
-    raise ValueError('fixedXOR(): data arrays must be the same length!')
-  if type(a) is not str or type(b) is not str:
-    raise TypeError('fixedXOR(): input must be a string!')
-
-  c = ''.join(map(chr, [ord(i) ^ ord(j) for i, j in zip(a, b)]))
-  return c
+  return ret.decode('hex')
 
 def score_string(s):
-  '''Score a string based on its letter frequency compared to the average
-  English letter frequencies.  This is done by returning a log likelihood for
-  the given frequency distribution in the input string.
+  '''Return a score associated with how likely the string is given English
+  character frequencies.'''
 
-  Parameters:
-    s: str
-
-  Returns:
-    lenscore: float
-      The primary score based on how many characters in the alphabet the
-      string returns.
-    freqscore: float
-      The secondary score based on letter frequencies.
-  '''
-
-  # Typechecking
-  if type(s) is not str:
-    raise TypeError('score_string(): input must be string!')
-
-  s_letter_count = {}
-  for letter in en_freq_table:
-    s_letter_count[letter] = 0
-
-  # Get the frequency distribution
-  for char in s:
-    if char in string.ascii_uppercase:
-      s_letter_count[char.lower()] += 1
-    elif char in en_freq_table:
-      s_letter_count[char] += 1
-    elif ord(char) > 126:
-      return (0, -numpy.inf)
-
-  total_letters = sum(s_letter_count.values())
-  if total_letters == 0:
-    return (0, -numpy.inf)
+  rare_char_score = -4
+  nonascii_score = -100
 
   score = 0
-  for char in s_letter_count:
-    score += log(binom.pmf(s_letter_count[char], total_letters, 
-               en_freq_table[char]))
+  for char in s:
+    if char in en_log_freqs:
+      score += en_log_freqs[char]
+    elif 31 < ord(char) < 127:
+      score += rare_char_score
+    else:
+      score += nonascii_score
 
-  return (total_letters, score)
+  return score
 
-def single_byte_xor(instring):
-  '''Crack a cypher that has been xor'd against a single character.'''
-  maxscore = (0, -numpy.inf)
-  maxstring = ''
-  for char in [chr(x) for x in range(128)]:
-    s = fixedXOR(instring, (len(instring) / len(char)) * char)
-    lenscore, freqscore = score_string(s)
-    if lenscore > maxscore[0]:
-      maxscore = (lenscore, freqscore)
-      maxstring = s
-    elif lenscore == maxscore[0] and freqscore > maxscore[1]:
-      maxscore = (lenscore, freqscore)
-      maxstring = s
-  return (maxstring, maxscore)
+def encrypt_single_key_xor(instring, key):
+  '''Encrypt a string against a repeating single character.'''
 
-def single_byte_xor_hex(instring):
-  '''Crack a cypher that has been xor'd against a single character.'''
-  return single_byte_xor(binascii.unhexlify(instring))
+  repeated_char = len(instring) * key
+  return fixedXOR(instring, repeated_char)
 
-def detect_singchar_xor(file):
-  '''Find the single line of a file that has been encrypted using a
-  single-character XOR.'''
-  with open(file) as infile:
-    maxscore = (0, -numpy.inf)
-    for line in infile:
-      s, score = single_byte_xor_hex(line.strip())
-      if score[0] > maxscore[0]:
-        maxstring = s
-        maxscore = score
-      elif score[0] == maxscore[0] and score[1] > maxscore[1]:
-        maxstring = s
-        maxscore = score
-    return maxstring
+def decrypt_single_key_xor(instring, return_key=False):
+  '''Decode a string that has been encrypted against a single character.'''
 
-def repeating_key_xor(instring, key):
-  '''Encrypt a string with a key using XOR.'''
+  maxscore = None
+  best_string = None
+  best_key = None
+  for i in xrange(32, 128):
+    s = encrypt_single_key_xor(instring, chr(i))
+    score = score_string(s)
+    if score > maxscore:
+      maxscore = score
+      best_string = s
+      best_key = chr(i)
 
-  outstring = ''
-  for i, char in enumerate(instring):
-    outstring += fixedXOR_hex(char.encode('hex'), key[i%len(key)].encode('hex'))
-  return outstring
+  if return_key:
+    return (best_string, best_key)
+  else:
+    return best_string
 
-def hamming_distance(str1, str2):
-  '''Compute the Hamming distance between str1 and str2 (represented as
-  bytes).'''
+def detect_single_char_xor(filename):
+  '''Find the line in the file that has been encrypted with single key
+  XOR.'''
 
-  distance = 0
-  for a, b in zip(str1, str2):
-    for x, y in zip('{0:08b}'.format(ord(a)), '{0:08b}'.format(ord(b))):
-      if x != y:
-        distance += 1
+  maxscore = None
+  best_line = None
+  with open(filename) as infile:
+    lines = infile.readlines()
 
-  return distance
+  for raw_line in lines:
+    line = raw_line.strip().decode('hex')
+    decoded_line = decrypt_single_key_xor(line)
+    score = score_string(decoded_line) 
+    if score > maxscore:
+      best_line = decoded_line
+      maxscore = score
+
+  return best_line
+
+def repeating_key_xor(s, key):
+  '''Encrypt a string s with the repeating key.'''
+
+  key_len = len(key)
+  enc_blocks = []
+  for i in range(key_len):
+    decrypt_block = encrypt_single_key_xor(s[i::key_len], key[i])
+    enc_blocks.append(decrypt_block)
+
+  enc_block = [elem for sublist in zip(*enc_blocks) for elem in sublist]
+  enc_block = ''
+  for i in xrange(len(enc_blocks[0])):
+    for block in enc_blocks:
+      try:
+        enc_block += block[i]
+      except IndexError:
+        pass
+  return enc_block.encode('hex')
+
+def hamming_distance(b1, b2):
+  '''Compute the Hamming distance between s1 and s2.'''
+
+  int1 = int(b1.encode('hex'), base=16)
+  int2 = int(b2.encode('hex'), base=16)
+  xored = int1 ^ int2
+  hamming_distance = 0
+  while xored:
+    if xored % 2 == 1:
+      hamming_distance += 1
+    xored >>= 1
+
+  return hamming_distance
 
 def find_keysize(data):
-  '''Given a string of bytes find the keysize by finding the smallest edit
-  distance between blocks of different keysizes.'''
+  '''Find the keysize used to encrypt the data.'''
 
-  key_distances = []  
-  for keysize in range(1, min(1025, len(data)/4)):
-    blocks = [data[i*keysize:(i+1)*keysize] for i in range(4)]
-    block_distances = []
-    for i in range(len(blocks)-1):
-      block1 = blocks[i]
-      for block2 in blocks[i+1:]:
-        block_distances.append(hamming_distance(block1, block2))
-    key_distances.append(float(sum(block_distances)) / len(block_distances)
-      / keysize)
+  nblocks = 12
+  max_keysize = 40
+  normalized_hamdists = []
+  min_keysize = 1
+  for keysize in range(min_keysize, min(max_keysize+1, len(data)/nblocks)):
+    hamdists = []
+    for i in range(nblocks):
+      block1 = data[keysize*i:keysize*(i+1)]
+      block2 = data[keysize*(i+1):keysize*(i+2)]
+      hamdists.append(hamming_distance(block1, block2) / float(keysize))
+    mean_hamdist = sum(hamdists) / len(hamdists)
+    normalized_hamdists.append(mean_hamdist)
 
-  min_keysize = key_distances.index(min(key_distances)) + 1
-  return min_keysize
+  return normalized_hamdists.index(min(normalized_hamdists)) + min_keysize
 
-def break_repeating_key_xor(data):
-  '''Break text that has been encrypted with repeating key XOR.'''
+def break_rep_key_xor(data, return_key=False):
+  '''Break repeating key xor.'''
+
   keysize = find_keysize(data)
-  blocks = [data[i::keysize] for i in range(keysize)]
   decrypt_blocks = []
-  for block in blocks:
-    decrypt_blocks.append(single_byte_xor(block)[0])
-  decrypt_str = ''
+  key = ''
+  for i in range(keysize):
+    block = data[i::keysize]
+    decrypt_block, decrypt_key = decrypt_single_key_xor(block, return_key=True)
+    decrypt_blocks.append(decrypt_block)
+    key += decrypt_key
+  
+  decrypted_message = ''
   for i in range(len(decrypt_blocks[0])):
-    for block in decrypt_blocks:
-      if i < len(block):
-        decrypt_str += block[i]
-  return decrypt_str
+    for decrypt_block in decrypt_blocks:
+      try:
+        decrypted_message += decrypt_block[i]
+      except IndexError:
+        pass
 
-def break_rep_key_file(filename):
-  '''Break a file that has been encrypted with repeating key XOR.'''
-  with open(filename) as infile:
-    data_raw = infile.readlines()
-  data64 = ''.join([elem.strip() for elem in data_raw])
-  data = binascii.a2b_base64(data64)
-  return break_repeating_key_xor(data)
+  if return_key:
+    return decrypted_message, key
+  else:
+    return decrypted_message
 
 if __name__ == '__main__':
   # Challenge 1
@@ -244,20 +175,20 @@ if __name__ == '__main__':
   STRING1_2A = '1c0111001f010100061a024b53535009181c'
   STRING1_2B = '686974207468652062756c6c277320657965'
   RESULT1_2  = '746865206b696420646f6e277420706c6179'
-  assert fixedXOR_hex(STRING1_2A, STRING1_2B) == RESULT1_2
+  assert fixedXOR(STRING1_2A.decode('hex'), 
+    STRING1_2B.decode('hex')).encode('hex') == RESULT1_2
   print "Challenge 2 test passed"
   print
 
   # Challenge 3
   STRING1_3 = '1b37373331363f78151b7f2b783431333d78397828372d363c78373e783a393b3736'
   print "Challenge 3 solution:"
-  print single_byte_xor_hex(STRING1_3)[0]
+  print decrypt_single_key_xor(STRING1_3.decode('hex'))
   print
 
   # Challenge 4
   print "Challenge 4 solution:"
-  print detect_singchar_xor('set1-4.txt'),
-  print
+  print detect_single_char_xor('set1-4.txt')
 
   # Challenge 5
   STRING1_5A = 'Burning \'em, if you ain\'t quick and nimble\n'
@@ -272,6 +203,22 @@ if __name__ == '__main__':
   print
 
   # Challenge 6
+  B64_1_6 = ''
+  with open('set1-6.txt') as infile:
+    for line in infile:
+      B64_1_6 += line.strip()
+  DATA1_6 = base64.b64decode(B64_1_6)
   print "Challenge 6 solution:"
-  print break_rep_key_file('set1-6.txt')
+  print break_rep_key_xor(DATA1_6)
   print
+
+  # Challenge 7
+  KEY1_7 = 'YELLOW SUBMARINE'
+  DATA_64_1_7 = ''
+  with open('set1-7.txt') as infile:
+    for line in infile:
+      DATA_64_1_7 += line.strip()
+  DATA1_7 = base64.b64decode(DATA_64_1_7)
+  CIPHER = AES.new(KEY1_7, AES.MODE_ECB)
+  print "Challenge 7 solution:"
+  print CIPHER.decrypt(DATA1_7)
